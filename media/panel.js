@@ -24,6 +24,7 @@
   const cfgOpenRouterModel = /** @type {HTMLSelectElement} */ (q('#cfg-openrouter-model'));
   const cfgOpenRouterModelHint = q('#cfg-openrouter-model-hint');
   const cfgStyle      = /** @type {HTMLSelectElement}*/ (q('#cfg-style'));
+  const cfgToolMode   = /** @type {HTMLSelectElement}*/ (q('#cfg-tool-mode'));
   const cfgError      = q('#cfg-error');
   const cfgSaveBtn    = /** @type {HTMLButtonElement}*/ (q('#cfg-save-btn'));
   const toggleKey     = q('#toggle-key');
@@ -111,7 +112,7 @@
     cfgSaveBtn.disabled = true;
     cfgSaveBtn.textContent = 'Saving...';
     vscode.postMessage({ type: 'saveConfig', provider: p, apiKey: key,
-      baseUrl: url, model: cfgModel.value.trim(), teachingStyle: cfgStyle.value });
+      baseUrl: url, model: cfgModel.value.trim(), teachingStyle: cfgStyle.value, toolMode: cfgToolMode.value });
   });
 
   function showCfgError(msg) {
@@ -237,6 +238,10 @@
         appendError(msg.message);
         break;
 
+      case 'toolEvent':
+        appendToolEvent(msg.event);
+        break;
+
       case 'cleared':
         messages.innerHTML = '';
         goalInput.value = '';
@@ -253,6 +258,7 @@
     cfgBaseurl.value     = cfg.baseUrl       || '';
     cfgModel.value       = cfg.model         || '';
     cfgStyle.value       = cfg.teachingStyle || 'socratic';
+    cfgToolMode.value    = cfg.toolMode      || 'guided';
     updateProviderFields();
   }
 
@@ -331,6 +337,18 @@
     const d = el('div', 'err-toast');
     d.textContent = `Error: ${text}`;
     messages.appendChild(d);
+    scrollToBottom();
+  }
+
+  function appendToolEvent(event) {
+    const wrap = el('div', `msg tool ${event.status}`);
+    const label = el('div', 'msg-label');
+    label.textContent = 'Tool';
+    const body = el('div', 'msg-body');
+    body.innerHTML = md(`**${event.title}**\n\n${event.detail}`);
+    wrap.appendChild(label);
+    wrap.appendChild(body);
+    messages.appendChild(wrap);
     scrollToBottom();
   }
 

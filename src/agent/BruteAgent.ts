@@ -1,6 +1,13 @@
 import * as vscode from 'vscode';
 import { ChatMessage, ModelProvider } from '../models/ModelProvider';
 import { buildSystemPrompt, buildCodeCheckPrompt } from './prompts';
+import {
+  BruteToolEvent,
+  BruteToolHost,
+  formatToolResult,
+  getConfiguredToolMode,
+  tryParseToolCall,
+} from '../tools';
 
 export interface Project {
   goal: string;
@@ -19,6 +26,7 @@ export interface AgentMessage {
 export class BruteAgent {
   private history: ChatMessage[] = [];
   private provider: ModelProvider;
+  private readonly toolHost: BruteToolHost;
   private model: string | undefined;
   private teachingStyle: 'socratic' | 'direct' | 'hints-only';
   project: Project | null = null;
@@ -26,9 +34,11 @@ export class BruteAgent {
   onStream?: (delta: string) => void;
   onDone?: (fullResponse: string) => void;
   onError?: (error: Error) => void;
+  onToolEvent?: (event: BruteToolEvent) => void;
 
-  constructor(provider: ModelProvider) {
+  constructor(provider: ModelProvider, toolHost = new BruteToolHost()) {
     this.provider = provider;
+    this.toolHost = toolHost;
     const cfg = vscode.workspace.getConfiguration('bruteCoding');
     this.teachingStyle = cfg.get<'socratic' | 'direct' | 'hints-only'>('teachingStyle', 'socratic');
     const modelOverride = cfg.get<string>('model', '');
@@ -36,7 +46,7 @@ export class BruteAgent {
 
     this.history.push({
       role: 'system',
-      content: buildSystemPrompt(this.teachingStyle),
+      content: buildSystemPrompt(this.teachingStyle, BruteToolHost.describeTools(getConfiguredToolMode())),
     });
   }
 
@@ -79,25 +89,41 @@ Please welcome the student, outline the milestones you see for this project, and
   }
 
   private async send(userContent: string): Promise<void> {
+    const initialHistoryLength = this.history.length;
     this.history.push({ role: 'user', content: userContent });
 
-    let fullResponse = '';
-
     try {
-      for await (const chunk of this.provider.chat(this.history, this.model)) {
-        if (!chunk.done) {
-          fullResponse += chunk.delta;
-          this.onStream?.(chunk.delta);
+      for (let index = 0; index < 6; index += 1) {
+        let fullResponse = '';
+
+        for await (const chunk of this.provider.chat(this.history, this.model)) {
+          if (!chunk.done) {
+            fullResponse += chunk.delta;
+          }
         }
+
+        const toolCall = tryParseToolCall(fullResponse);
+        if (!toolCall) {
+          this.history.push({ role: 'assistant', content: fullResponse });
+          this.onStream?.(fullResponse);
+          this.onDone?.(fullResponse);
+          return;
+        }
+
+        const { envelope, event } = await this.toolHost.execute(toolCall);
+        this.onToolEvent?.(event);
+        this.history.push({ role: 'assistant', content: fullResponse });
+        this.history.push({
+          role: 'user',
+          content: `Tool result:\n\`\`\`json\n${formatToolResult(envelope)}\n\`\`\``,
+        });
       }
 
-      this.history.push({ role: 'assistant', content: fullResponse });
-      this.onDone?.(fullResponse);
+      throw new Error('Tool loop exceeded the safety limit.');
     } catch (err) {
+      this.history.splice(initialHistoryLength);
       const error = err instanceof Error ? err : new Error(String(err));
       this.onError?.(error);
-      // Remove the user message we just added so history stays consistent
-      this.history.pop();
     }
   }
 

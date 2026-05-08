@@ -10,12 +10,14 @@ import {
   storeApiKey,
 } from '../models/providerFactory';
 import { getOpenRouterModels } from '../models/OpenRouterModels';
+import { BruteToolEvent } from '../tools';
 
 type PanelMessage =
   | { type: 'ready' }
   | { type: 'startProject'; goal: string; language: string }
   | { type: 'chat'; text: string }
   | { type: 'checkCode' }
+  | { type: 'toolEvent'; event: BruteToolEvent }
   | { type: 'clearSession' }
   | { type: 'getOpenRouterModels' }
   | {
@@ -25,6 +27,7 @@ type PanelMessage =
       baseUrl: string;
       model: string;
       teachingStyle: string;
+      toolMode: string;
     };
 
 export class BruteCodingPanel {
@@ -89,6 +92,9 @@ export class BruteCodingPanel {
     };
     this.agent.onError = (err) => {
       this.panel.webview.postMessage({ type: 'error', message: err.message });
+    };
+    this.agent.onToolEvent = (event) => {
+      this.panel.webview.postMessage({ type: 'toolEvent', event });
     };
   }
 
@@ -178,6 +184,7 @@ export class BruteCodingPanel {
         baseUrl,
         model: cfg.get<string>('model', ''),
         teachingStyle: cfg.get<string>('teachingStyle', 'socratic'),
+        toolMode: cfg.get<string>('toolMode', 'guided'),
       },
     });
   }
@@ -190,6 +197,7 @@ export class BruteCodingPanel {
       await cfg.update('modelProvider', msg.provider, target);
       await cfg.update('teachingStyle', msg.teachingStyle as 'socratic' | 'direct' | 'hints-only', target);
       await cfg.update('model', msg.model, target);
+      await cfg.update('toolMode', msg.toolMode as 'read-only' | 'guided' | 'full-access', target);
 
       // Only write API key if user entered a real value (not the masked placeholder)
       const isRealKey = msg.apiKey && msg.apiKey !== '********';

@@ -2,7 +2,7 @@ export interface TeachingStyle {
   name: 'socratic' | 'direct' | 'hints-only';
 }
 
-export function buildSystemPrompt(style: TeachingStyle['name']): string {
+export function buildSystemPrompt(style: TeachingStyle['name'], toolInstructions?: string): string {
   const styleInstructions: Record<typeof style, string> = {
     socratic: `Guide the student using the Socratic method. Ask probing questions that lead them to the answer rather than stating it. When they're stuck, ask questions like "What do you think happens when..." or "How might you approach...". Only reveal direct answers if the student has been stuck for multiple exchanges.`,
     direct: `Give clear, direct instructions for what the student should code next. Be explicit about what to write, but don't write the code yourself. Say things like "Next, create a function called X that takes Y and returns Z" or "Now add error handling for the case where...".`,
@@ -35,7 +35,9 @@ When a student sets a goal, you will:
 3. When they report progress or share code, assess it and either confirm/correct or advance to the next task.
 4. Track which milestone you're on and occasionally remind the student of overall progress.
 
-Remember: your success metric is the student's growth, not task completion speed.`;
+Remember: your success metric is the student's growth, not task completion speed.
+
+${toolInstructions ? `## Local Tools\n${toolInstructions}` : ''}`.trim();
 }
 
 export function buildCodeCheckPrompt(

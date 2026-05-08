@@ -74,6 +74,18 @@
           </select>
         </div>
 
+        <div class="form-section">Tool Mode</div>
+
+        <div class="field">
+          <label for="cfg-tool-mode">What tools can BruteCoding use?</label>
+          <select id="cfg-tool-mode">
+            <option value="read-only">Read-only - file reads and confirmed shell commands</option>
+            <option value="guided">Guided - reads, confirmed shell commands, scaffold suggestions</option>
+            <option value="full-access">Full-access - reads, shell commands without confirmation, scaffold suggestions</option>
+          </select>
+          <p class="field-note">Web search is not implemented yet. `full-access` currently removes command confirmations but does not enable new remote tools.</p>
+        </div>
+
         <p id="cfg-error" class="form-error hidden"></p>
 
         <button type="submit" id="cfg-save-btn" class="btn-primary">Save &amp; Continue</button>

@@ -28,6 +28,7 @@ Good for:
 - **Goal-driven sessions**: describe what you want to build or learn, and the agent plans milestones and gives you the next task.
 - **Code review**: point the agent at your active file or selection and it reviews your work without rewriting it for you.
 - **Three teaching styles**: Socratic, Direct, and Hints-only.
+- **Tool modes**: choose between read-only, guided, and full-access local tooling.
 - **Multiple providers**: Anthropic Claude, OpenAI, OpenRouter, Ollama, and OpenAI-compatible endpoints.
 - **VS Code native surfaces**: Activity Bar webview, Secondary Sidebar chat view, editor command, status bar entry, chat participant, and language model provider integration where available.
 - **Safer credential storage**: pasted API keys are stored with VS Code SecretStorage, not in `settings.json`.
@@ -80,7 +81,8 @@ Describe your goal and language, hit **Start Session**, and follow the agent's l
 - Code review currently sends the active file or selection to the model, but it does not yet collect diagnostics, terminal output, test results, or runtime logs automatically.
 - The agent does not edit files. That is intentional: BruteCoding is meant to coach, not take over.
 - Session state is in memory. Restarting VS Code clears the active conversation.
-- Tool-use is not implemented yet. A likely next step is read-only context tools for diagnostics, active file metadata, project config, and test output.
+- Tool-use is now available in a guarded starter form with configurable modes: `read_file`, `run_command`, and preview-only `suggest_edit`.
+- Web search is not implemented yet.
 
 ---
 
@@ -138,7 +140,7 @@ npm run package
 
 ## Roadmap Ideas
 
-- Read-only context tools for diagnostics, active file metadata, project config, and terminal/test output
+- Better tool coverage for diagnostics, active file metadata, project config, and terminal/test output
 - Better code-check prompts that distinguish review from debugging
 - Persisted sessions
 - Per-workspace teaching preferences

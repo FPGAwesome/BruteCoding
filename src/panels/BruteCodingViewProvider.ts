@@ -10,12 +10,14 @@ import {
   storeApiKey,
 } from '../models/providerFactory';
 import { getOpenRouterModels } from '../models/OpenRouterModels';
+import { BruteToolEvent } from '../tools';
 
 type PanelMessage =
   | { type: 'ready' }
   | { type: 'startProject'; goal: string; language: string }
   | { type: 'chat'; text: string }
   | { type: 'checkCode' }
+  | { type: 'toolEvent'; event: BruteToolEvent }
   | { type: 'clearSession' }
   | { type: 'getOpenRouterModels' }
   | {
@@ -25,6 +27,7 @@ type PanelMessage =
       baseUrl: string;
       model: string;
       teachingStyle: string;
+      toolMode: string;
     };
 
 export class BruteCodingViewProvider implements vscode.WebviewViewProvider {
@@ -73,6 +76,9 @@ export class BruteCodingViewProvider implements vscode.WebviewViewProvider {
     };
     this.agent.onError = (err) => {
       this.view?.webview.postMessage({ type: 'error', message: err.message });
+    };
+    this.agent.onToolEvent = (event) => {
+      this.view?.webview.postMessage({ type: 'toolEvent', event });
     };
   }
 
@@ -160,6 +166,7 @@ export class BruteCodingViewProvider implements vscode.WebviewViewProvider {
         baseUrl,
         model: cfg.get<string>('model', ''),
         teachingStyle: cfg.get<string>('teachingStyle', 'socratic'),
+        toolMode: cfg.get<string>('toolMode', 'guided'),
       },
     });
   }
@@ -172,6 +179,7 @@ export class BruteCodingViewProvider implements vscode.WebviewViewProvider {
       await cfg.update('modelProvider', msg.provider, target);
       await cfg.update('teachingStyle', msg.teachingStyle as 'socratic' | 'direct' | 'hints-only', target);
       await cfg.update('model', msg.model, target);
+      await cfg.update('toolMode', msg.toolMode as 'read-only' | 'guided' | 'full-access', target);
 
       const isRealKey = msg.apiKey && msg.apiKey !== '********';
       if (isRealKey) {

@@ -81,6 +81,16 @@
           ],
           "default": "socratic",
           "description": "Teaching style: socratic (questions), direct (clear instructions), hints-only (minimal guidance)"
+        },
+        "bruteCoding.toolMode": {
+          "type": "string",
+          "enum": [
+            "read-only",
+            "guided",
+            "full-access"
+          ],
+          "default": "guided",
+          "description": "Tool permission mode: read-only (file reads and confirmed shell commands), guided (adds scaffold suggestions), full-access (runs shell commands without confirmation). Web search is not implemented yet."
         }
       }
     },

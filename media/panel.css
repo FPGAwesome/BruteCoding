@@ -216,6 +216,19 @@ button {
   background: var(--vscode-button-hoverBackground);
 }
 
+.msg.tool .msg-label {
+  color: var(--vscode-descriptionForeground);
+}
+
+.msg.tool .msg-body {
+  border-left: 2px solid var(--vscode-textLink-foreground);
+  padding-left: 10px;
+}
+
+.msg.tool.blocked .msg-body {
+  border-left-color: var(--vscode-errorForeground);
+}
+
 .btn-secondary {
   border: 1px solid var(--vscode-button-border, var(--vscode-widget-border, transparent));
   background: var(--vscode-button-secondaryBackground);
