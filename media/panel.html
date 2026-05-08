@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'none'; style-src {{CSP_SOURCE}} 'unsafe-inline'; script-src {{CSP_SOURCE}};" />
+  <link rel="stylesheet" href="{{CSS_URI}}" />
+  <title>BruteCoding</title>
+</head>
+<body>
+  <div id="app" data-screen="setup">
+
+    <!-- Config screen -->
+    <div id="config-screen" class="screen">
+      <div class="brand">
+        <span class="brand-mark">BC</span>
+        <div>
+          <div class="brand-name">BruteCoding</div>
+          <div class="brand-subtitle">Teaching Session</div>
+        </div>
+      </div>
+
+      <form id="config-form">
+        <div class="form-section">AI Provider</div>
+
+        <div class="field">
+          <label for="cfg-provider">Provider</label>
+          <select id="cfg-provider">
+            <option value="anthropic">Anthropic (Claude)</option>
+            <option value="openai">OpenAI</option>
+            <option value="openrouter">OpenRouter</option>
+            <option value="ollama">Ollama (local)</option>
+            <option value="openai-compatible">OpenAI-compatible</option>
+          </select>
+        </div>
+
+        <div class="field" id="cfg-apikey-field">
+          <label for="cfg-apikey">API Key</label>
+          <div class="input-row">
+            <input id="cfg-apikey" type="password" placeholder="Paste your key..." autocomplete="off" />
+            <button type="button" id="toggle-key" class="icon-btn" title="Show / hide">&#128065;</button>
+          </div>
+          <p class="field-note">Saved to VS Code settings. Never leaves your machine except to your provider.</p>
+        </div>
+
+        <div class="field" id="cfg-baseurl-field">
+          <label for="cfg-baseurl">Base URL</label>
+          <input id="cfg-baseurl" type="url" placeholder="http://localhost:11434/v1" />
+        </div>
+
+        <div class="field">
+          <label for="cfg-model">Model <span class="opt">optional</span></label>
+          <input id="cfg-model" type="text" placeholder="Leave blank for provider default" />
+          <p class="field-note" id="cfg-model-hint">Default: claude-sonnet-4-6</p>
+        </div>
+
+        <div class="field hidden" id="cfg-openrouter-model-field">
+          <label for="cfg-openrouter-model">OpenRouter model</label>
+          <select id="cfg-openrouter-model">
+            <option value="">Loading OpenRouter models...</option>
+          </select>
+          <p class="field-note" id="cfg-openrouter-model-hint">Select a model to fill the model ID above.</p>
+        </div>
+
+        <div class="form-section">Teaching Style</div>
+
+        <div class="field">
+          <label for="cfg-style">How should I guide you?</label>
+          <select id="cfg-style">
+            <option value="socratic">Socratic - questions first</option>
+            <option value="direct">Direct - step by step</option>
+            <option value="hints-only">Hints only - minimal nudges</option>
+          </select>
+        </div>
+
+        <p id="cfg-error" class="form-error hidden"></p>
+
+        <button type="submit" id="cfg-save-btn" class="btn-primary">Save &amp; Continue</button>
+      </form>
+    </div>
+
+    <!-- Setup screen -->
+    <div id="setup-screen" class="screen">
+      <div class="setup-chat-header">
+        <div class="brand compact">
+          <span class="brand-mark">BC</span>
+          <div>
+            <div class="brand-name">BruteCoding</div>
+            <div class="brand-subtitle">Teaching Session</div>
+          </div>
+        </div>
+        <button type="button" id="open-settings-btn" class="icon-btn" title="Settings">&#9881;</button>
+      </div>
+
+      <div id="setup-messages">
+        <div class="msg assistant">
+          <div class="msg-label">BruteCoding</div>
+          <div class="msg-body">
+            <p>You write the code. I'll guide the way.</p>
+            <p>Tell me what you want to build or learn, and I’ll turn it into the first concrete task.</p>
+          </div>
+        </div>
+      </div>
+
+      <form id="setup-form">
+        <div id="setup-config-notice" class="setup-config-notice hidden">
+          <div>
+            <strong>Configure an API key to begin</strong>
+            <p>Choose a provider and save your credentials before starting a teaching session.</p>
+          </div>
+          <button type="button" id="configure-key-btn" class="btn-primary">Configure</button>
+        </div>
+        <div class="field">
+          <textarea id="goal-input" rows="4"
+            aria-label="What do you want to build or learn?"
+            placeholder="Build a REST API in Go&#10;Learn Python by making a CLI tool&#10;Ship a SaaS auth system in TypeScript"
+            required></textarea>
+        </div>
+        <div class="field">
+          <input id="lang-input" type="text" aria-label="Primary language or stack" placeholder="Primary language / stack" required />
+        </div>
+        <div class="setup-actions">
+          <button type="submit" id="setup-start-btn" class="btn-primary">Start Session</button>
+          <button type="button" id="setup-check-code-btn" class="btn-secondary">Check Code</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Chat screen -->
+    <div id="chat-screen" class="screen">
+      <div id="chat-header">
+        <div id="project-pill">
+          <span id="project-goal-label"></span>
+          <span id="project-lang-badge"></span>
+        </div>
+        <div class="header-btns">
+          <button id="settings-btn" class="icon-btn" title="Settings">&#9881;</button>
+          <button id="new-session-btn" class="icon-btn" title="New session">&#10227;</button>
+        </div>
+      </div>
+
+      <div id="messages"></div>
+
+      <div id="composer">
+        <div id="typing-dots" class="hidden">
+          <span></span><span></span><span></span>
+        </div>
+        <div id="input-wrap">
+          <textarea id="chat-input" rows="1"
+            placeholder="What did you write? Ask a question, or say 'done'..."></textarea>
+          <div id="composer-btns">
+            <button id="check-code-btn" class="btn-secondary">Check Code</button>
+            <button id="send-btn" class="btn-primary">Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <script src="{{JS_URI}}"></script>
+</body>
+</html>

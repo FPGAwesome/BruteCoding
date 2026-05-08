@@ -1,0 +1,188 @@
+{
+  "name": "brute-coding",
+  "displayName": "BruteCoding",
+  "description": "The reverse vibe-coder: an AI that teaches you to code by guiding you, not doing it for you.",
+  "version": "0.1.0",
+  "publisher": "brutecoding",
+  "engines": {
+    "vscode": "^1.104.0"
+  },
+  "categories": [
+    "Education",
+    "Other"
+  ],
+  "keywords": [
+    "ai",
+    "learning",
+    "teaching",
+    "coding",
+    "education"
+  ],
+  "license": "MIT",
+  "activationEvents": [
+    "onChatParticipant:brute-coding.brutecoding",
+    "onView:bruteCoding.chatView",
+    "onView:bruteCoding.panelChatView",
+    "onCommand:bruteCoding.openPanel",
+    "onCommand:bruteCoding.newProject",
+    "onCommand:bruteCoding.checkMyCode"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "bruteCoding.openPanel",
+        "title": "BruteCoding: Open Teaching Panel",
+        "icon": {
+          "light": "media/activity-icon.svg",
+          "dark": "media/activity-icon.svg"
+        }
+      },
+      {
+        "command": "bruteCoding.newProject",
+        "title": "BruteCoding: Start New Project"
+      },
+      {
+        "command": "bruteCoding.checkMyCode",
+        "title": "BruteCoding: Check My Code"
+      }
+    ],
+    "configuration": {
+      "title": "BruteCoding",
+      "properties": {
+        "bruteCoding.modelProvider": {
+          "type": "string",
+          "enum": [
+            "anthropic",
+            "openai",
+            "openrouter",
+            "ollama",
+            "openai-compatible"
+          ],
+          "default": "anthropic",
+          "description": "AI model provider to use"
+        },
+        "bruteCoding.openaiCompatibleBaseUrl": {
+          "type": "string",
+          "default": "http://localhost:11434/v1",
+          "description": "Base URL for OpenAI-compatible APIs (Ollama, LM Studio, etc.)"
+        },
+        "bruteCoding.model": {
+          "type": "string",
+          "default": "",
+          "description": "Model name override (e.g. claude-sonnet-4-6, gpt-4o, llama3). Defaults to provider's recommended model."
+        },
+        "bruteCoding.teachingStyle": {
+          "type": "string",
+          "enum": [
+            "socratic",
+            "direct",
+            "hints-only"
+          ],
+          "default": "socratic",
+          "description": "Teaching style: socratic (questions), direct (clear instructions), hints-only (minimal guidance)"
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "bruteCoding",
+          "title": "BruteCoding",
+          "icon": "media/activity-icon.svg"
+        }
+      ],
+      "secondarySidebar": [
+        {
+          "id": "bruteCodingChatPanel",
+          "title": "BruteCoding",
+          "icon": "media/activity-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "bruteCoding": [
+        {
+          "type": "webview",
+          "id": "bruteCoding.chatView",
+          "name": "Teaching Session"
+        }
+      ],
+      "bruteCodingChatPanel": [
+        {
+          "type": "webview",
+          "id": "bruteCoding.panelChatView",
+          "name": "Chat"
+        }
+      ]
+    },
+    "chatParticipants": [
+      {
+        "id": "brute-coding.brutecoding",
+        "fullName": "BruteCoding",
+        "name": "brutecoding",
+        "description": "Guided coding practice where you write the code.",
+        "isSticky": true,
+        "commands": [
+          {
+            "name": "start",
+            "description": "Start a guided coding session"
+          },
+          {
+            "name": "check",
+            "description": "Review the active file or selection"
+          },
+          {
+            "name": "reset",
+            "description": "Clear the current BruteCoding chat session"
+          }
+        ]
+      }
+    ],
+    "languageModelChatProviders": [
+      {
+        "vendor": "brute-coding",
+        "displayName": "BruteCoding",
+        "managementCommand": "bruteCoding.openPanel"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "bruteCoding.openPanel",
+          "group": "navigation@1"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "bruteCoding.checkMyCode",
+          "group": "bruteCoding",
+          "when": "bruteCoding.sessionActive"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "webpack --mode production",
+    "dev": "webpack --mode development --watch",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.104.0",
+    "@typescript-eslint/eslint-plugin": "^8.59.2",
+    "@typescript-eslint/parser": "^8.59.2",
+    "@vscode/vsce": "^3.9.1",
+    "eslint": "^8.0.0",
+    "ts-loader": "^9.0.0",
+    "typescript": "^5.3.0",
+    "webpack": "^5.89.0",
+    "webpack-cli": "^5.1.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.36.0",
+    "openai": "^4.67.0"
+  }
+}
