@@ -90,7 +90,16 @@
             "full-access"
           ],
           "default": "guided",
-          "description": "Tool permission mode: read-only (file reads and confirmed shell commands), guided (adds scaffold suggestions), full-access (runs shell commands without confirmation). Web search is not implemented yet."
+          "description": "Tool permission mode: read-only (workspace info, file listing, and file reads only), guided (adds shell commands with safe read-only discovery auto-approved and other commands confirmed), full-access (runs non-destructive shell commands without confirmation). Web search is not implemented yet."
+        },
+        "bruteCoding.commandRunner": {
+          "type": "string",
+          "enum": [
+            "background",
+            "vscode-terminal"
+          ],
+          "default": "background",
+          "description": "Where shell commands run: background captures output without opening a VS Code terminal; vscode-terminal runs commands in the BruteCoding Tools integrated terminal."
         }
       }
     },

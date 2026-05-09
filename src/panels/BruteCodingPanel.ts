@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { BruteAgent } from '../agent/BruteAgent';
+import { archiveAgentSession } from '../agent/SessionStore';
 import {
   apiKeyEnvForProvider,
   createProvider,
@@ -10,7 +11,7 @@ import {
   storeApiKey,
 } from '../models/providerFactory';
 import { getOpenRouterModels } from '../models/OpenRouterModels';
-import { BruteToolEvent } from '../tools';
+import { BruteToolEvent, BruteToolHost, CommandApprovalRequest } from '../tools';
 
 type PanelMessage =
   | { type: 'ready' }
@@ -20,6 +21,8 @@ type PanelMessage =
   | { type: 'toolEvent'; event: BruteToolEvent }
   | { type: 'clearSession' }
   | { type: 'getOpenRouterModels' }
+  | { type: 'updateToolMode'; toolMode: string }
+  | { type: 'commandApprovalResult'; id: string; approved: boolean }
   | {
       type: 'saveConfig';
       provider: string;
@@ -28,6 +31,7 @@ type PanelMessage =
       model: string;
       teachingStyle: string;
       toolMode: string;
+      commandRunner: string;
     };
 
 export class BruteCodingPanel {
@@ -39,6 +43,7 @@ export class BruteCodingPanel {
   private agent: BruteAgent;
   private disposables: vscode.Disposable[] = [];
   private readonly context: vscode.ExtensionContext;
+  private pendingCommandApprovals = new Map<string, (approved: boolean) => void>();
 
   static createOrShow(context: vscode.ExtensionContext): void {
     const column = vscode.window.activeTextEditor
@@ -69,7 +74,7 @@ export class BruteCodingPanel {
     this.context = context;
     this.extensionUri = context.extensionUri;
 
-    this.agent = new BruteAgent(createProviderPreview());
+    this.agent = this.createAgent(createProviderPreview());
 
     this.panel.webview.html = this.getHtml();
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
@@ -98,6 +103,30 @@ export class BruteCodingPanel {
     };
   }
 
+  private createAgent(provider: ReturnType<typeof createProviderPreview>): BruteAgent {
+    return new BruteAgent(provider, new BruteToolHost({
+      requestCommandApproval: request => this.requestCommandApproval(request),
+    }));
+  }
+
+  private requestCommandApproval(request: CommandApprovalRequest): Promise<boolean> {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    this.panel.webview.postMessage({ type: 'commandApprovalRequested', id, request });
+
+    return new Promise(resolve => {
+      this.pendingCommandApprovals.set(id, resolve);
+    });
+  }
+
+  private resolveCommandApproval(id: string, approved: boolean): void {
+    const resolve = this.pendingCommandApprovals.get(id);
+    if (!resolve) {
+      return;
+    }
+    this.pendingCommandApprovals.delete(id);
+    resolve(approved);
+  }
+
   private async handleMessage(msg: PanelMessage): Promise<void> {
     switch (msg.type) {
       case 'ready': {
@@ -115,8 +144,18 @@ export class BruteCodingPanel {
         break;
       }
 
+      case 'updateToolMode': {
+        await this.updateToolMode(msg.toolMode);
+        break;
+      }
+
+      case 'commandApprovalResult': {
+        this.resolveCommandApproval(msg.id, msg.approved);
+        break;
+      }
+
       case 'startProject': {
-        this.agent = new BruteAgent(await createProvider(this.context));
+        this.agent = this.createAgent(await createProvider(this.context));
         this.wireAgent();
         this.panel.webview.postMessage({ type: 'agentTyping' });
         await this.agent.startProject(msg.goal, msg.language);
@@ -150,8 +189,9 @@ export class BruteCodingPanel {
       }
 
       case 'clearSession': {
+        await archiveAgentSession(this.context, this.agent);
         this.agent.clearHistory();
-        this.agent = new BruteAgent(await createProvider(this.context));
+        this.agent = this.createAgent(await createProvider(this.context));
         this.wireAgent();
         await vscode.commands.executeCommand('setContext', 'bruteCoding.sessionActive', false);
         this.panel.webview.postMessage({ type: 'cleared' });
@@ -185,6 +225,7 @@ export class BruteCodingPanel {
         model: cfg.get<string>('model', ''),
         teachingStyle: cfg.get<string>('teachingStyle', 'socratic'),
         toolMode: cfg.get<string>('toolMode', 'guided'),
+        commandRunner: cfg.get<string>('commandRunner', 'background'),
       },
     });
   }
@@ -198,6 +239,7 @@ export class BruteCodingPanel {
       await cfg.update('teachingStyle', msg.teachingStyle as 'socratic' | 'direct' | 'hints-only', target);
       await cfg.update('model', msg.model, target);
       await cfg.update('toolMode', msg.toolMode as 'read-only' | 'guided' | 'full-access', target);
+      await cfg.update('commandRunner', msg.commandRunner as 'background' | 'vscode-terminal', target);
 
       // Only write API key if user entered a real value (not the masked placeholder)
       const isRealKey = msg.apiKey && msg.apiKey !== '********';
@@ -211,7 +253,7 @@ export class BruteCodingPanel {
 
       // Rebuild agent with new provider config
       this.agent.clearHistory();
-      this.agent = new BruteAgent(await createProvider(this.context));
+      this.agent = this.createAgent(await createProvider(this.context));
       this.wireAgent();
 
       this.panel.webview.postMessage({ type: 'configSaved' });
@@ -219,6 +261,12 @@ export class BruteCodingPanel {
       const message = err instanceof Error ? err.message : String(err);
       this.panel.webview.postMessage({ type: 'configError', message });
     }
+  }
+
+  private async updateToolMode(toolMode: string): Promise<void> {
+    const cfg = vscode.workspace.getConfiguration('bruteCoding');
+    await cfg.update('toolMode', toolMode as 'read-only' | 'guided' | 'full-access', vscode.ConfigurationTarget.Global);
+    this.agent.refreshToolPrompt();
   }
 
   private async sendOpenRouterModels(): Promise<void> {

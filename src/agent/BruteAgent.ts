@@ -6,7 +6,7 @@ import {
   BruteToolHost,
   formatToolResult,
   getConfiguredToolMode,
-  tryParseToolCall,
+  tryParseToolCalls,
 } from '../tools';
 
 export interface Project {
@@ -48,6 +48,13 @@ export class BruteAgent {
       role: 'system',
       content: buildSystemPrompt(this.teachingStyle, BruteToolHost.describeTools(getConfiguredToolMode())),
     });
+  }
+
+  refreshToolPrompt(): void {
+    this.history[0] = {
+      role: 'system',
+      content: buildSystemPrompt(this.teachingStyle, BruteToolHost.describeTools(getConfiguredToolMode())),
+    };
   }
 
   async startProject(goal: string, language: string): Promise<void> {
@@ -102,20 +109,32 @@ Please welcome the student, outline the milestones you see for this project, and
           }
         }
 
-        const toolCall = tryParseToolCall(fullResponse);
-        if (!toolCall) {
+        const toolCalls = tryParseToolCalls(fullResponse);
+        if (!toolCalls.length) {
           this.history.push({ role: 'assistant', content: fullResponse });
           this.onStream?.(fullResponse);
           this.onDone?.(fullResponse);
           return;
         }
 
-        const { envelope, event } = await this.toolHost.execute(toolCall);
-        this.onToolEvent?.(event);
+        const envelopes = [];
+        for (const toolCall of toolCalls) {
+          const { envelope, event } = await this.toolHost.execute(toolCall);
+          envelopes.push(envelope);
+          this.onToolEvent?.(event);
+        }
+
         this.history.push({ role: 'assistant', content: fullResponse });
         this.history.push({
           role: 'user',
-          content: `Tool result:\n\`\`\`json\n${formatToolResult(envelope)}\n\`\`\``,
+          content: [
+            `Tool result${envelopes.length === 1 ? '' : 's'}:`,
+            '```json',
+            formatToolResult(envelopes.length === 1 ? envelopes[0] : envelopes),
+            '```',
+            '',
+            'If a tool failed for an easily recoverable reason such as a wrong path, try one targeted debugging step such as `workspace_info` or `list_files`, then retry with the corrected input. Do not stop at the first obvious tool failure.',
+          ].join('\n'),
         });
       }
 

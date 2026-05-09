@@ -6,6 +6,7 @@ export interface OpenRouterModelOption {
   contextLength: number;
   promptPrice: string;
   completionPrice: string;
+  isFree: boolean;
   label: string;
   detail: string;
 }
@@ -38,7 +39,10 @@ export async function getOpenRouterModels(): Promise<OpenRouterModelOption[]> {
       const promptPrice = model.pricing?.prompt ?? '0';
       const completionPrice = model.pricing?.completion ?? '0';
       const contextLength = model.context_length ?? 0;
-      const priceLabel = `${formatUsdPerMillion(promptPrice)} in / ${formatUsdPerMillion(completionPrice)} out`;
+      const isFree = model.id!.endsWith(':free');
+      const priceLabel = isFree
+        ? 'free tier'
+        : `${formatUsdPerMillion(promptPrice)} in / ${formatUsdPerMillion(completionPrice)} out`;
       const contextLabel = contextLength ? `${formatContext(contextLength)} ctx` : 'unknown ctx';
 
       return {
@@ -47,11 +51,12 @@ export async function getOpenRouterModels(): Promise<OpenRouterModelOption[]> {
         contextLength,
         promptPrice,
         completionPrice,
-        label: `${model.name} - ${priceLabel}`,
+        isFree,
+        label: `${isFree ? '[FREE] ' : ''}${model.name} - ${priceLabel}`,
         detail: `${model.id} - ${contextLabel}`,
       };
     })
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => Number(b.isFree) - Number(a.isFree) || a.name.localeCompare(b.name));
 
   cachedModels = models;
   cachedAt = now;
@@ -87,7 +92,7 @@ function getJson<T>(url: string): Promise<T> {
 function formatUsdPerMillion(value: string): string {
   const price = Number(value);
   if (!Number.isFinite(price) || price <= 0) {
-    return 'free';
+    return '$0/M listed';
   }
 
   const perMillion = price * 1_000_000;

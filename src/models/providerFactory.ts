@@ -3,6 +3,8 @@ import { ModelProvider } from './ModelProvider';
 import { AnthropicProvider } from './AnthropicProvider';
 import { OpenAICompatibleProvider } from './OpenAICompatibleProvider';
 
+const DEFAULT_OPENROUTER_MODEL = 'qwen/qwen3-next-80b-a3b-instruct:free';
+
 type ApiKeyProvider = 'anthropic' | 'openai' | 'openrouter' | 'openai-compatible';
 
 const API_KEY_SETTINGS: Record<ApiKeyProvider, string> = {
@@ -134,7 +136,8 @@ function createProviderWithKeys(apiKeys: Partial<Record<ApiKeyProvider, string>>
         baseURL: 'https://openrouter.ai/api/v1',
         apiKey: apiKeys.openrouter,
         envApiKey: process.env.OPENROUTER_API_KEY,
-        defaultModel: cfg.get<string>('model') || 'openai/gpt-5.2',
+        defaultModel: cfg.get<string>('model') || DEFAULT_OPENROUTER_MODEL,
+        disableProviderFallbacks: true,
         defaultHeaders: {
           'X-OpenRouter-Title': 'BruteCoding',
         },

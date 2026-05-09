@@ -25,6 +25,7 @@
   const cfgOpenRouterModelHint = q('#cfg-openrouter-model-hint');
   const cfgStyle      = /** @type {HTMLSelectElement}*/ (q('#cfg-style'));
   const cfgToolMode   = /** @type {HTMLSelectElement}*/ (q('#cfg-tool-mode'));
+  const cfgCommandRunner = /** @type {HTMLSelectElement}*/ (q('#cfg-command-runner'));
   const cfgError      = q('#cfg-error');
   const cfgSaveBtn    = /** @type {HTMLButtonElement}*/ (q('#cfg-save-btn'));
   const toggleKey     = q('#toggle-key');
@@ -49,6 +50,11 @@
   const typingDots    = q('#typing-dots');
   const goalLabel     = q('#project-goal-label');
   const langBadge     = q('#project-lang-badge');
+  const quickToolMode = /** @type {HTMLSelectElement} */ (q('#quick-tool-mode'));
+  const toolTray      = /** @type {HTMLDetailsElement} */ (q('#tool-tray'));
+  const toolTrayTitle = q('#tool-tray-title');
+  const toolTrayStatus = q('#tool-tray-status');
+  const toolTrayDetail = q('#tool-tray-detail');
 
   let isTyping = false;
   let streamEl = /** @type {HTMLElement|null} */ (null);
@@ -58,17 +64,19 @@
   let openRouterModelsLoaded = false;
   let openRouterModelsLoading = false;
   let openRouterModels = [];
+  let toolEvents = [];
 
   // ── Provider UI ───────────────────────────────────────────────────────────
   const modelDefaults = {
     anthropic: 'claude-sonnet-4-6',
     openai: 'gpt-4o',
-    openrouter: 'openai/gpt-5.2',
+    openrouter: 'qwen/qwen3-next-80b-a3b-instruct:free',
     ollama: 'llama3.1',
     'openai-compatible': '',
   };
 
   function updateProviderFields() {
+    const previousProvider = cfgProvider.dataset.previousProvider || '';
     const p = cfgProvider.value;
     const showsKey = p === 'anthropic' || p === 'openai' || p === 'openrouter' || p === 'openai-compatible';
     const needsUrl = p === 'ollama' || p === 'openai-compatible';
@@ -78,6 +86,13 @@
     if (needsUrl && !cfgBaseurl.value) cfgBaseurl.value = 'http://localhost:11434/v1';
     const def = modelDefaults[p];
     cfgModelHint.textContent = def ? `Default: ${def}` : 'Enter the model name for your endpoint.';
+    if (p === 'openrouter' && previousProvider && previousProvider !== 'openrouter') {
+      const current = cfgModel.value.trim();
+      if (!current || current === modelDefaults[previousProvider]) {
+        cfgModel.value = modelDefaults.openrouter;
+      }
+    }
+    cfgProvider.dataset.previousProvider = p;
     if (p === 'openrouter') loadOpenRouterModels();
   }
 
@@ -112,7 +127,7 @@
     cfgSaveBtn.disabled = true;
     cfgSaveBtn.textContent = 'Saving...';
     vscode.postMessage({ type: 'saveConfig', provider: p, apiKey: key,
-      baseUrl: url, model: cfgModel.value.trim(), teachingStyle: cfgStyle.value, toolMode: cfgToolMode.value });
+      baseUrl: url, model: cfgModel.value.trim(), teachingStyle: cfgStyle.value, toolMode: cfgToolMode.value, commandRunner: cfgCommandRunner.value });
   });
 
   function showCfgError(msg) {
@@ -149,10 +164,13 @@
   });
   settingsBtn.addEventListener('click',     () => { settingsFrom = 'chat';  showScreen('config'); });
 
+  quickToolMode.addEventListener('change', () => {
+    cfgToolMode.value = quickToolMode.value;
+    vscode.postMessage({ type: 'updateToolMode', toolMode: quickToolMode.value });
+  });
+
   newSessionBtn.addEventListener('click', () => {
-    if (confirm('Start a new session? This clears the current conversation.')) {
-      vscode.postMessage({ type: 'clearSession' });
-    }
+    vscode.postMessage({ type: 'clearSession' });
   });
 
   // ── Chat input ────────────────────────────────────────────────────────────
@@ -210,6 +228,7 @@
 
       case 'agentTyping':
         setTyping(true);
+        resetToolTray();
         streamEl = startStream();
         streamBuf = '';
         break;
@@ -242,8 +261,13 @@
         appendToolEvent(msg.event);
         break;
 
+      case 'commandApprovalRequested':
+        showCommandApproval(msg.id, msg.request);
+        break;
+
       case 'cleared':
         messages.innerHTML = '';
+        resetToolTray();
         goalInput.value = '';
         langInput.value = '';
         showScreen('setup');
@@ -259,6 +283,8 @@
     cfgModel.value       = cfg.model         || '';
     cfgStyle.value       = cfg.teachingStyle || 'socratic';
     cfgToolMode.value    = cfg.toolMode      || 'guided';
+    quickToolMode.value  = cfg.toolMode      || 'guided';
+    cfgCommandRunner.value = cfg.commandRunner || 'background';
     updateProviderFields();
   }
 
@@ -341,15 +367,65 @@
   }
 
   function appendToolEvent(event) {
-    const wrap = el('div', `msg tool ${event.status}`);
-    const label = el('div', 'msg-label');
-    label.textContent = 'Tool';
-    const body = el('div', 'msg-body');
-    body.innerHTML = md(`**${event.title}**\n\n${event.detail}`);
-    wrap.appendChild(label);
-    wrap.appendChild(body);
-    messages.appendChild(wrap);
-    scrollToBottom();
+    toolEvents.push(event);
+    toolTray.classList.remove('hidden', 'completed', 'blocked');
+    toolTray.classList.add(event.status);
+    toolTray.open = false;
+    toolTrayTitle.textContent = toolEvents.length === 1
+      ? event.title
+      : `${event.title} (${toolEvents.length} tools this turn)`;
+    toolTrayStatus.textContent = event.status === 'completed' ? 'Completed' : 'Blocked';
+    toolTrayDetail.innerHTML = toolEvents.map((toolEvent, index) => {
+      const status = toolEvent.status === 'completed' ? 'Completed' : 'Blocked';
+      return `<section class="tool-tray-item ${toolEvent.status}">
+        <div class="tool-tray-item-head">
+          <span>${index + 1}. ${esc(toolEvent.title)}</span>
+          <span>${status}</span>
+        </div>
+        <div class="tool-tray-item-detail">${md(toolEvent.detail)}</div>
+      </section>`;
+    }).join('');
+  }
+
+  function resetToolTray() {
+    toolEvents = [];
+    toolTray.classList.add('hidden');
+    toolTray.classList.remove('completed', 'blocked');
+    toolTray.open = false;
+    toolTrayTitle.textContent = '';
+    toolTrayStatus.textContent = '';
+    toolTrayDetail.innerHTML = '';
+  }
+
+  function showCommandApproval(id, request) {
+    toolTray.classList.remove('hidden', 'completed', 'blocked');
+    toolTray.classList.add('blocked');
+    toolTray.open = true;
+    toolTrayTitle.textContent = 'Approve command';
+    toolTrayStatus.textContent = 'Waiting';
+    toolTrayDetail.innerHTML = `
+      <section class="command-approval">
+        <div class="command-approval-command"><code>${esc(request.command)}</code></div>
+        <div class="command-approval-meta">in <code>${esc(request.cwd)}</code></div>
+        <p>${esc(request.reason)}</p>
+        <div class="command-approval-actions">
+          <button type="button" class="btn-primary" data-approval="run">Run</button>
+          <button type="button" class="btn-secondary" data-approval="cancel">Cancel</button>
+        </div>
+      </section>`;
+
+    toolTrayDetail.querySelector('[data-approval="run"]')?.addEventListener('click', () => {
+      vscode.postMessage({ type: 'commandApprovalResult', id, approved: true });
+      toolTrayTitle.textContent = 'Command approved';
+      toolTrayStatus.textContent = 'Running';
+      toolTray.open = false;
+    });
+    toolTrayDetail.querySelector('[data-approval="cancel"]')?.addEventListener('click', () => {
+      vscode.postMessage({ type: 'commandApprovalResult', id, approved: false });
+      toolTrayTitle.textContent = 'Command cancelled';
+      toolTrayStatus.textContent = 'Blocked';
+      toolTray.open = false;
+    });
   }
 
   function setTyping(on) {
