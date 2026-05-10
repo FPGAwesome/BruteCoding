@@ -557,6 +557,55 @@ button:disabled {
   color: var(--vscode-foreground);
 }
 
+#task-card {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border));
+  background: var(--vscode-sideBar-background);
+  padding: 10px 12px;
+}
+
+.task-card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+#task-card-kicker {
+  color: var(--vscode-descriptionForeground);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+#task-card-title {
+  margin: 3px 0 0;
+  color: var(--vscode-foreground);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+#task-card-objective {
+  margin: 7px 0 0;
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+#task-card-criteria {
+  margin: 7px 0 0;
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  padding-left: 17px;
+}
+
+#task-card-criteria li {
+  margin: 2px 0;
+}
+
 #messages {
   display: flex;
   flex: 1;

@@ -332,6 +332,7 @@ export class BruteToolHost {
 
   private async handleReadFile(input: ReadFileInput): Promise<{ envelope: ToolResultEnvelope; event: BruteToolEvent }> {
     try {
+      validateStringArgument(input.path, 'path');
       const filePath = await resolveWorkspacePath(input.path);
       const raw = await fs.readFile(filePath, 'utf8');
       const lines = raw.split(/\r?\n/);
@@ -369,14 +370,11 @@ export class BruteToolHost {
   }
 
   private async handleRunCommand(input: RunCommandInput): Promise<{ envelope: ToolResultEnvelope; event: BruteToolEvent }> {
-    const command = input.command.trim();
-    if (!command) {
-      return toolFailure('run_command', new Error('Command must not be empty.'));
-    }
-
     let cwdForResult = input.cwd ?? '.';
 
     try {
+      validateStringArgument(input.command, 'command');
+      const command = input.command.trim();
       const cwd = input.cwd ? await resolveWorkspacePath(input.cwd) : await getPreferredWorkspacePath();
       cwdForResult = workspaceRelativePath(cwd);
       const timeoutMs = clampPositiveInteger(input.timeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS, 1000);
@@ -466,7 +464,7 @@ export class BruteToolHost {
           tool: 'run_command',
           error: err.message,
           result: {
-            command,
+            command: typeof input.command === 'string' ? input.command.trim() : '',
             cwd: cwdForResult,
             exitCode: typeof err.code === 'number' ? err.code : null,
             stdout: trimOutput(err.stdout ?? ''),
@@ -477,7 +475,7 @@ export class BruteToolHost {
         event: {
           tool: 'run_command',
           title: 'Command failed',
-          detail: `\`${command}\``,
+          detail: typeof input.command === 'string' ? `\`${input.command.trim()}\`` : err.message,
           status: 'blocked',
         },
       };
@@ -486,6 +484,9 @@ export class BruteToolHost {
 
   private async handleSuggestEdit(input: SuggestEditInput): Promise<{ envelope: ToolResultEnvelope; event: BruteToolEvent }> {
     try {
+      validateStringArgument(input.path, 'path');
+      validateStringArgument(input.instruction, 'instruction');
+      validateStringArgument(input.suggested, 'suggested');
       const allowedIntents: SuggestEditInput['intent'][] = [
         'boilerplate',
         'comment',
@@ -1255,6 +1256,12 @@ function looksLikeFullImplementation(suggested: string): boolean {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function validateStringArgument(value: unknown, name: string): asserts value is string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error(`Missing or invalid required argument \`${name}\`.`);
+  }
 }
 
 function toolFailure(tool: BruteToolName, error: unknown): { envelope: ToolResultEnvelope; event: BruteToolEvent } {

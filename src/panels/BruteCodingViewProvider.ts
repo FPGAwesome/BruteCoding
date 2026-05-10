@@ -20,6 +20,7 @@ type PanelMessage =
   | { type: 'checkCode' }
   | { type: 'toolEvent'; event: BruteToolEvent }
   | { type: 'clearSession' }
+  | { type: 'completeCard' }
   | { type: 'getOpenRouterModels' }
   | { type: 'updateToolMode'; toolMode: string }
   | { type: 'commandApprovalResult'; id: string; approved: boolean }
@@ -143,7 +144,15 @@ export class BruteCodingViewProvider implements vscode.WebviewViewProvider {
         this.wireAgent();
         this.view?.webview.postMessage({ type: 'agentTyping' });
         await this.agent.startProject(msg.goal, msg.language);
+        this.postProjectState();
         await vscode.commands.executeCommand('setContext', 'bruteCoding.sessionActive', true);
+        break;
+      }
+
+      case 'completeCard': {
+        this.view?.webview.postMessage({ type: 'agentTyping' });
+        await this.agent.completeCurrentCard();
+        this.postProjectState();
         break;
       }
 
@@ -178,6 +187,7 @@ export class BruteCodingViewProvider implements vscode.WebviewViewProvider {
         this.agent = this.createAgent(await createProvider(this.context));
         this.wireAgent();
         await vscode.commands.executeCommand('setContext', 'bruteCoding.sessionActive', false);
+        this.postProjectState();
         this.view?.webview.postMessage({ type: 'cleared' });
         break;
       }
@@ -210,6 +220,10 @@ export class BruteCodingViewProvider implements vscode.WebviewViewProvider {
         commandRunner: cfg.get<string>('commandRunner', 'background'),
       },
     });
+  }
+
+  private postProjectState(): void {
+    this.view?.webview.postMessage({ type: 'projectState', project: this.agent.project });
   }
 
   private async saveConfig(msg: Extract<PanelMessage, { type: 'saveConfig' }>): Promise<void> {

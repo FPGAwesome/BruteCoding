@@ -55,6 +55,12 @@
   const toolTrayTitle = q('#tool-tray-title');
   const toolTrayStatus = q('#tool-tray-status');
   const toolTrayDetail = q('#tool-tray-detail');
+  const taskCard = q('#task-card');
+  const taskCardKicker = q('#task-card-kicker');
+  const taskCardTitle = q('#task-card-title');
+  const taskCardObjective = q('#task-card-objective');
+  const taskCardCriteria = q('#task-card-criteria');
+  const completeCardBtn = /** @type {HTMLButtonElement} */ (q('#complete-card-btn'));
 
   let isTyping = false;
   let streamEl = /** @type {HTMLElement|null} */ (null);
@@ -180,6 +186,7 @@
   chatInput.addEventListener('input', () => autoGrow(chatInput));
   sendBtn.addEventListener('click', sendMessage);
   checkCodeBtn.addEventListener('click', () => vscode.postMessage({ type: 'checkCode' }));
+  completeCardBtn.addEventListener('click', () => vscode.postMessage({ type: 'completeCard' }));
 
   function sendMessage() {
     if (isTyping) return;
@@ -265,9 +272,14 @@
         showCommandApproval(msg.id, msg.request);
         break;
 
+      case 'projectState':
+        renderProjectState(msg.project);
+        break;
+
       case 'cleared':
         messages.innerHTML = '';
         resetToolTray();
+        renderProjectState(null);
         goalInput.value = '';
         langInput.value = '';
         showScreen('setup');
@@ -395,6 +407,24 @@
     toolTrayTitle.textContent = '';
     toolTrayStatus.textContent = '';
     toolTrayDetail.innerHTML = '';
+  }
+
+  function renderProjectState(project) {
+    if (!project || !project.cards || !project.currentCardId) {
+      taskCard.classList.add('hidden');
+      return;
+    }
+
+    const index = project.cards.findIndex(card => card.id === project.currentCardId);
+    const current = project.cards[index] || project.cards[0];
+    taskCard.classList.remove('hidden');
+    taskCardKicker.textContent = `Card ${index + 1} of ${project.cards.length} - ${current.concept}`;
+    taskCardTitle.textContent = current.title;
+    taskCardObjective.textContent = current.objective;
+    taskCardCriteria.innerHTML = current.successCriteria
+      .map(criterion => `<li>${esc(criterion)}</li>`)
+      .join('');
+    completeCardBtn.disabled = current.status === 'complete';
   }
 
   function showCommandApproval(id, request) {

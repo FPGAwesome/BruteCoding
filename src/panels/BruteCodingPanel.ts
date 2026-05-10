@@ -20,6 +20,7 @@ type PanelMessage =
   | { type: 'checkCode' }
   | { type: 'toolEvent'; event: BruteToolEvent }
   | { type: 'clearSession' }
+  | { type: 'completeCard' }
   | { type: 'getOpenRouterModels' }
   | { type: 'updateToolMode'; toolMode: string }
   | { type: 'commandApprovalResult'; id: string; approved: boolean }
@@ -159,7 +160,15 @@ export class BruteCodingPanel {
         this.wireAgent();
         this.panel.webview.postMessage({ type: 'agentTyping' });
         await this.agent.startProject(msg.goal, msg.language);
+        this.postProjectState();
         await vscode.commands.executeCommand('setContext', 'bruteCoding.sessionActive', true);
+        break;
+      }
+
+      case 'completeCard': {
+        this.panel.webview.postMessage({ type: 'agentTyping' });
+        await this.agent.completeCurrentCard();
+        this.postProjectState();
         break;
       }
 
@@ -194,6 +203,7 @@ export class BruteCodingPanel {
         this.agent = this.createAgent(await createProvider(this.context));
         this.wireAgent();
         await vscode.commands.executeCommand('setContext', 'bruteCoding.sessionActive', false);
+        this.postProjectState();
         this.panel.webview.postMessage({ type: 'cleared' });
         break;
       }
@@ -228,6 +238,10 @@ export class BruteCodingPanel {
         commandRunner: cfg.get<string>('commandRunner', 'background'),
       },
     });
+  }
+
+  private postProjectState(): void {
+    this.panel.webview.postMessage({ type: 'projectState', project: this.agent.project });
   }
 
   private async saveConfig(msg: Extract<PanelMessage, { type: 'saveConfig' }>): Promise<void> {
