@@ -21,17 +21,20 @@ const API_KEY_SECRETS: Record<ApiKeyProvider, string> = {
   'openai-compatible': 'bruteCoding.openaiCompatibleApiKey',
 };
 
-export async function createProvider(context: vscode.ExtensionContext): Promise<ModelProvider> {
+export async function createProvider(
+  context: vscode.ExtensionContext,
+  providerOverride?: string
+): Promise<ModelProvider> {
   return createProviderWithKeys({
     anthropic: await getStoredApiKey(context, 'anthropic'),
     openai: await getStoredApiKey(context, 'openai'),
     openrouter: await getStoredApiKey(context, 'openrouter'),
     'openai-compatible': await getStoredApiKey(context, 'openai-compatible'),
-  });
+  }, providerOverride);
 }
 
-export function createProviderPreview(): ModelProvider {
-  return createProviderWithKeys({});
+export function createProviderPreview(providerOverride?: string): ModelProvider {
+  return createProviderWithKeys({}, providerOverride);
 }
 
 export async function migrateApiKeysToSecrets(context: vscode.ExtensionContext): Promise<void> {
@@ -114,9 +117,12 @@ export async function hasConfiguredBackend(context: vscode.ExtensionContext): Pr
   return Boolean(await getStoredApiKey(context, provider) || apiKeyEnvForProvider(provider));
 }
 
-function createProviderWithKeys(apiKeys: Partial<Record<ApiKeyProvider, string>>): ModelProvider {
+function createProviderWithKeys(
+  apiKeys: Partial<Record<ApiKeyProvider, string>>,
+  providerOverride?: string
+): ModelProvider {
   const cfg = vscode.workspace.getConfiguration('bruteCoding');
-  const providerName = cfg.get<string>('modelProvider', 'anthropic');
+  const providerName = providerOverride || cfg.get<string>('modelProvider', 'anthropic');
 
   switch (providerName) {
     case 'anthropic':

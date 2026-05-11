@@ -55,6 +55,12 @@
           <p class="field-note" id="cfg-model-hint">Default: claude-sonnet-4-6</p>
         </div>
 
+        <div class="field">
+          <label for="cfg-taskmaster-model">Taskmaster model <span class="opt">optional</span></label>
+          <input id="cfg-taskmaster-model" type="text" placeholder="Leave blank to use the tutoring model" />
+          <p class="field-note">Used only to plan the task cards when a project starts.</p>
+        </div>
+
         <div class="field hidden" id="cfg-openrouter-model-field">
           <label for="cfg-openrouter-model">OpenRouter model</label>
           <select id="cfg-openrouter-model">
@@ -110,7 +116,10 @@
             <div class="brand-subtitle">Teaching Session</div>
           </div>
         </div>
-        <button type="button" id="open-settings-btn" class="icon-btn" title="Settings">&#9881;</button>
+        <div class="header-btns">
+          <button type="button" id="setup-history-btn" class="btn-ghost">History</button>
+          <button type="button" id="open-settings-btn" class="icon-btn" title="Settings">&#9881;</button>
+        </div>
       </div>
 
       <div id="setup-messages">
@@ -140,8 +149,42 @@
         <div class="field">
           <input id="lang-input" type="text" aria-label="Primary language or stack" placeholder="Primary language / stack" required />
         </div>
+        <details id="project-options">
+          <summary>Project options</summary>
+          <div class="field">
+            <label for="guidance-provider-select">Guidance provider</label>
+            <select id="guidance-provider-select"></select>
+          </div>
+          <div class="field">
+            <label for="guidance-model-select">Guidance model</label>
+            <select id="guidance-model-select"></select>
+            <p id="guidance-model-detail" class="field-note"></p>
+          </div>
+          <div class="field">
+            <label for="taskmaster-provider-select">Taskmaster provider</label>
+            <select id="taskmaster-provider-select"></select>
+          </div>
+          <div class="field">
+            <label for="taskmaster-model-select">Taskmaster model</label>
+            <select id="taskmaster-model-select"></select>
+            <p id="taskmaster-model-detail" class="field-note"></p>
+          </div>
+        </details>
+        <section id="plan-preview" class="hidden">
+          <div class="plan-preview-head">
+            <div>
+              <div class="form-section">Proposed Cards</div>
+              <p id="plan-preview-note" class="field-note">Review the project path before chat starts.</p>
+            </div>
+          </div>
+          <div id="plan-card-list"></div>
+          <div class="plan-actions">
+            <button type="button" id="regenerate-plan-btn" class="btn-secondary">Regenerate</button>
+            <button type="button" id="approve-plan-btn" class="btn-primary">Start Chat</button>
+          </div>
+        </section>
         <div class="setup-actions">
-          <button type="submit" id="setup-start-btn" class="btn-primary">Start Session</button>
+          <button type="submit" id="setup-start-btn" class="btn-primary">Plan Cards</button>
           <button type="button" id="setup-check-code-btn" class="btn-secondary">Check Code</button>
         </div>
       </form>
@@ -160,21 +203,27 @@
             <option value="guided">Ask first</option>
             <option value="full-access">Full send</option>
           </select>
+          <button id="history-btn" class="btn-ghost" type="button">History</button>
           <button id="settings-btn" class="icon-btn" title="Settings">&#9881;</button>
-          <button id="new-session-btn" class="icon-btn" title="New session">&#10227;</button>
+          <button id="new-session-btn" class="icon-btn" title="New project">+</button>
         </div>
       </div>
 
       <section id="task-card" class="hidden">
         <div class="task-card-top">
+          <button id="prev-card-btn" class="icon-btn" type="button" title="Previous card">&#8249;</button>
           <div>
             <div id="task-card-kicker"></div>
             <h2 id="task-card-title"></h2>
           </div>
+          <button id="next-card-btn" class="icon-btn" type="button" title="Next card">&#8250;</button>
           <button id="complete-card-btn" class="btn-secondary" type="button">Mark Complete</button>
         </div>
-        <p id="task-card-objective"></p>
-        <ul id="task-card-criteria"></ul>
+        <details id="task-card-meta">
+          <summary>Task details</summary>
+          <p id="task-card-objective"></p>
+          <ul id="task-card-criteria"></ul>
+        </details>
       </section>
 
       <div id="messages"></div>
@@ -198,6 +247,22 @@
             <button id="send-btn" class="btn-primary">Send</button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- History screen -->
+    <div id="history-screen" class="screen">
+      <div class="history-header">
+        <button id="history-back-btn" class="btn-ghost" type="button">Back</button>
+        <div>
+          <div class="brand-name">Saved Chats</div>
+          <div class="brand-subtitle">Pick up an archived card project</div>
+        </div>
+      </div>
+      <div id="history-list"></div>
+      <div id="history-empty" class="history-empty hidden">
+        <strong>No saved chats yet</strong>
+        <p>Starting a new session archives the current one here.</p>
       </div>
     </div>
 

@@ -12,6 +12,10 @@ import {
 export interface Project {
   goal: string;
   language: string;
+  guidanceProvider?: string;
+  taskmasterProvider?: string;
+  guidanceModel?: string;
+  taskmasterModel?: string;
   currentMilestone: number;
   currentTask: string;
   cards: TaskCard[];
@@ -27,6 +31,7 @@ export interface TaskCard {
   successCriteria: string[];
   status: 'active' | 'complete' | 'locked';
   summary?: string;
+  conversation: ChatMessage[];
 }
 
 export interface AgentMessage {
@@ -40,6 +45,7 @@ export class BruteAgent {
   private provider: ModelProvider;
   private readonly toolHost: BruteToolHost;
   private model: string | undefined;
+  private taskmasterModel: string | undefined;
   private teachingStyle: 'socratic' | 'direct' | 'hints-only';
   project: Project | null = null;
 
@@ -55,6 +61,8 @@ export class BruteAgent {
     this.teachingStyle = cfg.get<'socratic' | 'direct' | 'hints-only'>('teachingStyle', 'socratic');
     const modelOverride = cfg.get<string>('model', '');
     this.model = modelOverride || undefined;
+    const taskmasterOverride = cfg.get<string>('taskmasterModel', '');
+    this.taskmasterModel = taskmasterOverride || this.model;
 
     this.history.push({
       role: 'system',
@@ -70,25 +78,53 @@ export class BruteAgent {
   }
 
   async startProject(goal: string, language: string): Promise<void> {
-    const cards = createInitialCards(goal, language);
+    const cards = await this.createProjectCards(goal, language, this.taskmasterModel);
+    await this.startProjectWithCards(goal, language, cards, {
+      guidanceModel: this.model,
+      taskmasterModel: this.taskmasterModel,
+    });
+  }
+
+  async planProjectCards(goal: string, language: string, taskmasterModel?: string): Promise<TaskCard[]> {
+    return this.createProjectCards(goal, language, normalizeModelOverride(taskmasterModel, this.taskmasterModel));
+  }
+
+  async startProjectWithCards(
+    goal: string,
+    language: string,
+    cards: TaskCard[],
+    options: { guidanceProvider?: string; taskmasterProvider?: string; guidanceModel?: string; taskmasterModel?: string } = {}
+  ): Promise<void> {
+    this.model = normalizeModelOverride(options.guidanceModel, this.model);
+    this.taskmasterModel = normalizeModelOverride(options.taskmasterModel, this.taskmasterModel);
+    const normalizedCards = cards.map((card, index) => ({
+      ...card,
+      id: card.id || `card-${index + 1}`,
+      status: index === 0 ? 'active' as const : 'locked' as const,
+      conversation: [],
+    }));
+
     this.project = {
       goal,
       language,
+      guidanceProvider: options.guidanceProvider || this.provider.name,
+      taskmasterProvider: options.taskmasterProvider || this.provider.name,
+      guidanceModel: this.model,
+      taskmasterModel: this.taskmasterModel,
       currentMilestone: 0,
-      currentTask: cards[0].title,
-      cards,
-      currentCardId: cards[0].id,
+      currentTask: normalizedCards[0].title,
+      cards: normalizedCards,
+      currentCardId: normalizedCards[0].id,
       startedAt: new Date(),
     };
 
-    this.resetConversationForCurrentCard();
     const kickoff = this.buildCurrentCardKickoff('New student project starting now. Welcome the student, explain the active card briefly, and give the first specific action for this card.');
 
-    await this.send(kickoff);
+    await this.send(kickoff, { recordUserMessage: false });
   }
 
   async chat(userMessage: string): Promise<void> {
-    await this.send(this.project ? `${this.buildCurrentCardContext()}\n\nStudent message:\n${userMessage}` : userMessage);
+    await this.send(userMessage);
   }
 
   async checkCode(code: string): Promise<void> {
@@ -102,7 +138,7 @@ export class BruteAgent {
       this.project.language
     );
 
-    await this.send(checkPrompt);
+    await this.send(checkPrompt, { displayUserContent: 'Check my code.' });
   }
 
   async completeCurrentCard(): Promise<void> {
@@ -122,7 +158,7 @@ export class BruteAgent {
     const next = this.project.cards[currentIndex + 1];
     if (!next) {
       this.project.currentTask = 'Project complete';
-      await this.send('The student marked the final task card complete. Congratulate them briefly and suggest one optional stretch goal without starting a new lesson.');
+      await this.send('The student marked the final task card complete. Congratulate them briefly and suggest one optional stretch goal without starting a new lesson.', { recordUserMessage: false });
       return;
     }
 
@@ -130,20 +166,39 @@ export class BruteAgent {
     this.project.currentCardId = next.id;
     this.project.currentMilestone = currentIndex + 1;
     this.project.currentTask = next.title;
-    this.resetConversationForCurrentCard();
 
-    await this.send(this.buildCurrentCardKickoff('The previous card is complete. Start the next card as a fresh focused conversation. Assume completed cards are done.'));
+    await this.send(this.buildCurrentCardKickoff('The previous card is complete. Start the next card as a fresh focused conversation. Assume completed cards are done.'), { recordUserMessage: false });
   }
 
-  private async send(userContent: string): Promise<void> {
-    const initialHistoryLength = this.history.length;
-    this.history.push({ role: 'user', content: userContent });
+  selectCard(cardId: string): void {
+    if (!this.project || !this.project.cards.some(card => card.id === cardId)) {
+      return;
+    }
+
+    this.project.currentCardId = cardId;
+    const selectedIndex = this.project.cards.findIndex(card => card.id === cardId);
+    this.project.currentMilestone = Math.max(0, selectedIndex);
+    this.project.currentTask = this.getCurrentCard()?.title ?? this.project.currentTask;
+  }
+
+  private async send(
+    userContent: string,
+    options: { recordUserMessage?: boolean; displayUserContent?: string } = {}
+  ): Promise<void> {
+    const recordUserMessage = options.recordUserMessage ?? true;
+    const card = this.getCurrentCard();
+    const cardConversationLength = card?.conversation.length ?? 0;
+    const requestHistory = this.buildRequestHistory(userContent);
+
+    if (recordUserMessage && card) {
+      card.conversation.push({ role: 'user', content: options.displayUserContent ?? userContent });
+    }
 
     try {
       for (let index = 0; index < 6; index += 1) {
         let fullResponse = '';
 
-        for await (const chunk of this.provider.chat(this.history, this.model)) {
+        for await (const chunk of this.provider.chat(requestHistory, this.model)) {
           if (!chunk.done) {
             fullResponse += chunk.delta;
           }
@@ -151,7 +206,7 @@ export class BruteAgent {
 
         const toolCalls = tryParseToolCalls(fullResponse);
         if (!toolCalls.length) {
-          this.history.push({ role: 'assistant', content: fullResponse });
+          card?.conversation.push({ role: 'assistant', content: fullResponse });
           this.onStream?.(fullResponse);
           this.onDone?.(fullResponse);
           return;
@@ -164,8 +219,8 @@ export class BruteAgent {
           this.onToolEvent?.(event);
         }
 
-        this.history.push({ role: 'assistant', content: fullResponse });
-        this.history.push({
+        requestHistory.push({ role: 'assistant', content: fullResponse });
+        requestHistory.push({
           role: 'user',
           content: [
             `Tool result${envelopes.length === 1 ? '' : 's'}:`,
@@ -180,7 +235,9 @@ export class BruteAgent {
 
       throw new Error('Tool loop exceeded the safety limit.');
     } catch (err) {
-      this.history.splice(initialHistoryLength);
+      if (card) {
+        card.conversation.splice(cardConversationLength);
+      }
       const error = err instanceof Error ? err : new Error(String(err));
       this.onError?.(error);
     }
@@ -191,15 +248,46 @@ export class BruteAgent {
     this.project = null;
   }
 
-  getHistory(): ChatMessage[] {
-    return this.history.slice(1); // exclude system prompt
+  restoreProject(project: Project): void {
+    const cards = project.cards.map(card => ({
+      ...card,
+      conversation: card.conversation ?? [],
+      successCriteria: card.successCriteria ?? [],
+    }));
+    const currentCardId = cards.some(card => card.id === project.currentCardId)
+      ? project.currentCardId
+      : cards[0]?.id ?? '';
+
+    this.project = {
+      ...project,
+      cards,
+      currentCardId,
+      currentMilestone: Math.max(0, cards.findIndex(card => card.id === currentCardId)),
+      currentTask: cards.find(card => card.id === currentCardId)?.title ?? project.currentTask,
+      startedAt: project.startedAt instanceof Date ? project.startedAt : new Date(project.startedAt),
+    };
   }
 
-  private resetConversationForCurrentCard(): void {
-    this.history = [this.history[0], {
-      role: 'user',
-      content: this.buildCurrentCardContext(),
-    }];
+  getHistory(): ChatMessage[] {
+    if (!this.project) {
+      return [];
+    }
+
+    return this.project.cards.flatMap(card => card.conversation);
+  }
+
+  private buildRequestHistory(userContent: string): ChatMessage[] {
+    if (!this.project) {
+      return [this.history[0], { role: 'user', content: userContent }];
+    }
+
+    const current = this.getCurrentCard();
+    return [
+      this.history[0],
+      { role: 'user', content: this.buildCurrentCardContext() },
+      ...(current?.conversation ?? []),
+      { role: 'user', content: userContent },
+    ];
   }
 
   private buildCurrentCardKickoff(instruction: string): string {
@@ -238,6 +326,118 @@ export class BruteAgent {
       '- Ask for or inspect evidence before saying the active card is done.',
     ].join('\n');
   }
+
+  private getCurrentCard(): TaskCard | undefined {
+    return this.project?.cards.find(card => card.id === this.project?.currentCardId);
+  }
+
+  private async createProjectCards(goal: string, language: string, taskmasterModel?: string): Promise<TaskCard[]> {
+    try {
+      const response = await this.runTaskmaster(goal, language, taskmasterModel);
+      const parsed = parseCardPlan(response);
+      return normalizeCardPlan(parsed);
+    } catch {
+      return createInitialCards(goal, language);
+    }
+  }
+
+  private async runTaskmaster(goal: string, language: string, taskmasterModel?: string): Promise<string> {
+    const messages: ChatMessage[] = [
+      {
+        role: 'system',
+        content: [
+          'You are BruteCoding Taskmaster, a staff-level coding mentor who turns a project goal into a small sequence of focused teaching cards.',
+          'Return only JSON. No markdown, no prose.',
+          'The JSON shape must be:',
+          '{"cards":[{"title":"...","concept":"...","objective":"...","successCriteria":["..."]}]}',
+          'Create 2 to 6 cards. Each card should be completable in one focused tutoring conversation.',
+          'The first card should usually orient around the existing project or smallest starting context.',
+          'The final card should usually verify, test, or reflect on what was built.',
+          'Avoid broad phase names like "Implementation" unless the objective is concrete.',
+        ].join('\n'),
+      },
+      {
+        role: 'user',
+        content: [
+          `Project goal: ${goal}`,
+          `Language/stack: ${language}`,
+          '',
+          'Design the card plan now.',
+        ].join('\n'),
+      },
+    ];
+
+    let fullResponse = '';
+    for await (const chunk of this.provider.chat(messages, taskmasterModel)) {
+      if (!chunk.done) {
+        fullResponse += chunk.delta;
+      }
+    }
+    return fullResponse;
+  }
+}
+
+interface RawCardPlan {
+  cards?: Array<Partial<Omit<TaskCard, 'id' | 'status' | 'conversation'>>>;
+}
+
+function parseCardPlan(text: string): RawCardPlan {
+  const trimmed = text.trim();
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fenced?.[1] ?? trimmed;
+
+  try {
+    return JSON.parse(candidate) as RawCardPlan;
+  } catch {
+    const objectMatch = candidate.match(/\{[\s\S]*\}/);
+    if (!objectMatch) {
+      throw new Error('Taskmaster did not return JSON.');
+    }
+    return JSON.parse(objectMatch[0]) as RawCardPlan;
+  }
+}
+
+function normalizeCardPlan(plan: RawCardPlan): TaskCard[] {
+  const rawCards = Array.isArray(plan.cards) ? plan.cards.slice(0, 6) : [];
+  const cards = rawCards
+    .map((card, index): TaskCard | null => {
+      const title = cleanText(card.title);
+      const concept = cleanText(card.concept);
+      const objective = cleanText(card.objective);
+      const successCriteria = Array.isArray(card.successCriteria)
+        ? card.successCriteria.map(cleanText).filter(Boolean).slice(0, 5)
+        : [];
+
+      if (!title || !concept || !objective || successCriteria.length === 0) {
+        return null;
+      }
+
+      return {
+        id: `card-${index + 1}`,
+        title,
+        concept,
+        objective,
+        successCriteria,
+        status: index === 0 ? 'active' : 'locked',
+        conversation: [],
+      };
+    })
+    .filter((card): card is TaskCard => Boolean(card));
+
+  if (cards.length < 2) {
+    throw new Error('Taskmaster returned too few usable cards.');
+  }
+
+  return cards;
+}
+
+function cleanText(value: unknown): string {
+  return typeof value === 'string' ? value.trim().slice(0, 240) : '';
+}
+
+function normalizeModelOverride(value: string | undefined, fallback: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed || fallback;
 }
 
 function createInitialCards(goal: string, language: string): TaskCard[] {
@@ -253,6 +453,7 @@ function createInitialCards(goal: string, language: string): TaskCard[] {
         'The project can be opened or inspected without guessing paths.',
       ],
       status: 'active',
+      conversation: [],
     },
     {
       id: 'card-2',
@@ -265,6 +466,7 @@ function createInitialCards(goal: string, language: string): TaskCard[] {
         'The behavior can be run or checked locally.',
       ],
       status: 'locked',
+      conversation: [],
     },
     {
       id: 'card-3',
@@ -277,6 +479,7 @@ function createInitialCards(goal: string, language: string): TaskCard[] {
         'Obvious edge cases are named, even if not all are solved yet.',
       ],
       status: 'locked',
+      conversation: [],
     },
     {
       id: 'card-4',
@@ -289,6 +492,7 @@ function createInitialCards(goal: string, language: string): TaskCard[] {
         'The next improvement is clear.',
       ],
       status: 'locked',
+      conversation: [],
     },
   ];
 }

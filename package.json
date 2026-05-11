@@ -72,6 +72,11 @@
           "default": "",
           "description": "Model name override (e.g. claude-sonnet-4-6, gpt-4o, llama3). Defaults to provider's recommended model."
         },
+        "bruteCoding.taskmasterModel": {
+          "type": "string",
+          "default": "",
+          "description": "Optional model name override for planning task cards. Leave blank to use the main tutoring model."
+        },
         "bruteCoding.teachingStyle": {
           "type": "string",
           "enum": [

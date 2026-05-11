@@ -1,8 +1,14 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { BruteAgent } from '../agent/BruteAgent';
-import { archiveAgentSession } from '../agent/SessionStore';
+import { BruteAgent, TaskCard } from '../agent/BruteAgent';
+import {
+  archiveAgentSession,
+  deleteSavedSession,
+  getSavedSession,
+  hydrateSavedProject,
+  listSavedSessions,
+} from '../agent/SessionStore';
 import {
   apiKeyEnvForProvider,
   createProvider,
@@ -15,12 +21,18 @@ import { BruteToolEvent, BruteToolHost, CommandApprovalRequest } from '../tools'
 
 type PanelMessage =
   | { type: 'ready' }
-  | { type: 'startProject'; goal: string; language: string }
+  | { type: 'startProject'; goal: string; language: string; guidanceProvider?: string; guidanceModel?: string; taskmasterProvider?: string; taskmasterModel?: string }
+  | { type: 'planProject'; goal: string; language: string; taskmasterProvider?: string; taskmasterModel?: string }
+  | { type: 'approveProjectPlan'; goal: string; language: string; guidanceProvider?: string; guidanceModel?: string; taskmasterProvider?: string; taskmasterModel?: string; cards: TaskCard[] }
   | { type: 'chat'; text: string }
   | { type: 'checkCode' }
   | { type: 'toolEvent'; event: BruteToolEvent }
   | { type: 'clearSession' }
   | { type: 'completeCard' }
+  | { type: 'selectCard'; cardId: string }
+  | { type: 'getSessions' }
+  | { type: 'restoreSession'; id: string }
+  | { type: 'deleteSession'; id: string }
   | { type: 'getOpenRouterModels' }
   | { type: 'updateToolMode'; toolMode: string }
   | { type: 'commandApprovalResult'; id: string; approved: boolean }
@@ -30,6 +42,7 @@ type PanelMessage =
       apiKey: string;
       baseUrl: string;
       model: string;
+      taskmasterModel: string;
       teachingStyle: string;
       toolMode: string;
       commandRunner: string;
@@ -129,6 +142,11 @@ export class BruteCodingViewProvider implements vscode.WebviewViewProvider {
         break;
       }
 
+      case 'getSessions': {
+        this.postSavedSessions();
+        break;
+      }
+
       case 'updateToolMode': {
         await this.updateToolMode(msg.toolMode);
         break;
@@ -140,10 +158,40 @@ export class BruteCodingViewProvider implements vscode.WebviewViewProvider {
       }
 
       case 'startProject': {
-        this.agent = this.createAgent(await createProvider(this.context));
+        this.agent = this.createAgent(await createProvider(this.context, msg.guidanceProvider));
         this.wireAgent();
         this.view?.webview.postMessage({ type: 'agentTyping' });
-        await this.agent.startProject(msg.goal, msg.language);
+        const planner = this.createAgent(await createProvider(this.context, msg.taskmasterProvider));
+        const cards = await planner.planProjectCards(msg.goal, msg.language, msg.taskmasterModel);
+        await this.agent.startProjectWithCards(msg.goal, msg.language, cards, {
+          guidanceProvider: msg.guidanceProvider,
+          taskmasterProvider: msg.taskmasterProvider,
+          guidanceModel: msg.guidanceModel,
+          taskmasterModel: msg.taskmasterModel,
+        });
+        this.postProjectState();
+        await vscode.commands.executeCommand('setContext', 'bruteCoding.sessionActive', true);
+        break;
+      }
+
+      case 'planProject': {
+        this.view?.webview.postMessage({ type: 'planningProject' });
+        const planner = this.createAgent(await createProvider(this.context, msg.taskmasterProvider));
+        const cards = await planner.planProjectCards(msg.goal, msg.language, msg.taskmasterModel);
+        this.view?.webview.postMessage({ type: 'projectPlan', goal: msg.goal, language: msg.language, cards });
+        break;
+      }
+
+      case 'approveProjectPlan': {
+        this.agent = this.createAgent(await createProvider(this.context, msg.guidanceProvider));
+        this.wireAgent();
+        this.view?.webview.postMessage({ type: 'agentTyping' });
+        await this.agent.startProjectWithCards(msg.goal, msg.language, msg.cards, {
+          guidanceProvider: msg.guidanceProvider,
+          taskmasterProvider: msg.taskmasterProvider,
+          guidanceModel: msg.guidanceModel,
+          taskmasterModel: msg.taskmasterModel,
+        });
         this.postProjectState();
         await vscode.commands.executeCommand('setContext', 'bruteCoding.sessionActive', true);
         break;
@@ -159,6 +207,24 @@ export class BruteCodingViewProvider implements vscode.WebviewViewProvider {
       case 'chat': {
         this.view?.webview.postMessage({ type: 'agentTyping' });
         await this.agent.chat(msg.text);
+        this.postProjectState();
+        break;
+      }
+
+      case 'selectCard': {
+        this.agent.selectCard(msg.cardId);
+        this.postProjectState();
+        break;
+      }
+
+      case 'restoreSession': {
+        await this.restoreSession(msg.id);
+        break;
+      }
+
+      case 'deleteSession': {
+        await deleteSavedSession(this.context, msg.id);
+        this.postSavedSessions();
         break;
       }
 
@@ -178,6 +244,7 @@ export class BruteCodingViewProvider implements vscode.WebviewViewProvider {
 
         this.view?.webview.postMessage({ type: 'agentTyping' });
         await this.agent.checkCode(code);
+        this.postProjectState();
         break;
       }
 
@@ -215,6 +282,7 @@ export class BruteCodingViewProvider implements vscode.WebviewViewProvider {
         apiKey: storedKey ? '********' : '',
         baseUrl,
         model: cfg.get<string>('model', ''),
+        taskmasterModel: cfg.get<string>('taskmasterModel', ''),
         teachingStyle: cfg.get<string>('teachingStyle', 'socratic'),
         toolMode: cfg.get<string>('toolMode', 'guided'),
         commandRunner: cfg.get<string>('commandRunner', 'background'),
@@ -226,6 +294,27 @@ export class BruteCodingViewProvider implements vscode.WebviewViewProvider {
     this.view?.webview.postMessage({ type: 'projectState', project: this.agent.project });
   }
 
+  private postSavedSessions(): void {
+    this.view?.webview.postMessage({ type: 'savedSessions', sessions: listSavedSessions(this.context) });
+  }
+
+  private async restoreSession(id: string): Promise<void> {
+    const session = getSavedSession(this.context, id);
+    const project = session ? hydrateSavedProject(session) : null;
+    if (!session || !project) {
+      this.view?.webview.postMessage({ type: 'error', message: 'Saved session could not be restored.' });
+      this.postSavedSessions();
+      return;
+    }
+
+    this.agent = this.createAgent(await createProvider(this.context));
+    this.agent.restoreProject(project);
+    this.wireAgent();
+    await vscode.commands.executeCommand('setContext', 'bruteCoding.sessionActive', true);
+    this.view?.webview.postMessage({ type: 'sessionRestored' });
+    this.postProjectState();
+  }
+
   private async saveConfig(msg: Extract<PanelMessage, { type: 'saveConfig' }>): Promise<void> {
     try {
       const cfg = vscode.workspace.getConfiguration('bruteCoding');
@@ -234,6 +323,7 @@ export class BruteCodingViewProvider implements vscode.WebviewViewProvider {
       await cfg.update('modelProvider', msg.provider, target);
       await cfg.update('teachingStyle', msg.teachingStyle as 'socratic' | 'direct' | 'hints-only', target);
       await cfg.update('model', msg.model, target);
+      await cfg.update('taskmasterModel', msg.taskmasterModel, target);
       await cfg.update('toolMode', msg.toolMode as 'read-only' | 'guided' | 'full-access', target);
       await cfg.update('commandRunner', msg.commandRunner as 'background' | 'vscode-terminal', target);
 

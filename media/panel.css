@@ -31,12 +31,15 @@ textarea {
 
 #app[data-screen="config"] #config-screen,
 #app[data-screen="setup"] #setup-screen,
-#app[data-screen="chat"] #chat-screen {
+#app[data-screen="chat"] #chat-screen,
+#app[data-screen="history"] #history-screen {
   display: flex;
 }
 
 #app[data-screen="chat"],
 #app[data-screen="chat"] #chat-screen,
+#app[data-screen="history"],
+#app[data-screen="history"] #history-screen,
 #app[data-screen="setup"],
 #app[data-screen="setup"] #setup-screen {
   height: 100vh;
@@ -415,16 +418,19 @@ button:disabled {
 
 #setup-messages {
   display: flex;
-  flex: 1;
+  flex: 0 1 auto;
   flex-direction: column;
   gap: 14px;
+  max-height: 28vh;
   overflow-y: auto;
   padding: 16px 14px;
 }
 
 #setup-form {
   position: relative;
-  flex-shrink: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   border-top: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border));
   background: var(--vscode-sideBar-background);
   padding: 10px 12px 12px;
@@ -440,6 +446,82 @@ button:disabled {
   min-height: 88px;
   max-height: 160px;
   resize: vertical;
+}
+
+#project-options {
+  border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+#project-options summary {
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 650;
+  user-select: none;
+}
+
+#project-options[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#plan-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+  border-radius: 6px;
+  background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+  padding: 10px;
+}
+
+.plan-preview-head .form-section {
+  border-top: 0;
+  margin-top: 0;
+  padding-top: 0;
+}
+
+#plan-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.plan-card {
+  border-left: 2px solid var(--vscode-textLink-foreground);
+  padding-left: 9px;
+}
+
+.plan-card-title {
+  color: var(--vscode-foreground);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.plan-card-meta,
+.plan-card-objective,
+.plan-card-criteria {
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.plan-card-objective {
+  margin-top: 3px;
+}
+
+.plan-card-criteria {
+  margin: 5px 0 0;
+  padding-left: 16px;
+}
+
+.plan-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
 }
 
 .setup-config-notice {
@@ -557,6 +639,81 @@ button:disabled {
   color: var(--vscode-foreground);
 }
 
+#history-screen {
+  background: var(--vscode-sideBar-background);
+}
+
+.history-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border));
+  padding: 10px 12px;
+}
+
+#history-list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.history-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+  border-radius: 6px;
+  background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+  padding: 10px;
+}
+
+.history-item-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--vscode-foreground);
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-item-meta,
+.history-item-progress {
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.history-item-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.history-empty {
+  margin: 12px;
+  border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+  border-radius: 6px;
+  color: var(--vscode-descriptionForeground);
+  padding: 12px;
+}
+
+.history-empty strong {
+  display: block;
+  color: var(--vscode-foreground);
+  font-size: 12px;
+}
+
+.history-empty p {
+  margin: 4px 0 0;
+  font-size: 11px;
+}
+
 #task-card {
   flex-shrink: 0;
   border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border));
@@ -565,10 +722,10 @@ button:disabled {
 }
 
 .task-card-top {
-  display: flex;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: start;
   gap: 10px;
-  justify-content: space-between;
 }
 
 #task-card-kicker {
@@ -586,6 +743,18 @@ button:disabled {
   font-size: 13px;
   font-weight: 750;
   line-height: 1.25;
+}
+
+#task-card-meta {
+  margin-top: 7px;
+}
+
+#task-card-meta summary {
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 650;
+  user-select: none;
 }
 
 #task-card-objective {
