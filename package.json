@@ -207,6 +207,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.36.0",
+    "katex": "^0.16.46",
     "openai": "^4.67.0"
   }
 }

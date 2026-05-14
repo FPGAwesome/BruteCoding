@@ -374,8 +374,16 @@ export class BruteCodingViewProvider implements vscode.WebviewViewProvider {
       const jsUri = webview.asWebviewUri(
         vscode.Uri.joinPath(this.extensionUri, 'media', 'panel.js')
       );
+      const katexCssUri = webview.asWebviewUri(
+        vscode.Uri.joinPath(this.extensionUri, 'media', 'katex', 'katex.min.css')
+      );
+      const katexJsUri = webview.asWebviewUri(
+        vscode.Uri.joinPath(this.extensionUri, 'media', 'katex', 'katex.min.js')
+      );
       html = html.replace(/\{\{CSS_URI\}\}/g, cssUri.toString());
       html = html.replace(/\{\{JS_URI\}\}/g, jsUri.toString());
+      html = html.replace(/\{\{KATEX_CSS_URI\}\}/g, katexCssUri.toString());
+      html = html.replace(/\{\{KATEX_JS_URI\}\}/g, katexJsUri.toString());
       html = html.replace(/\{\{CSP_SOURCE\}\}/g, webview.cspSource);
       return html;
     }

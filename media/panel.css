@@ -465,7 +465,27 @@ button:disabled {
 #project-options[open] {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 13px;
+}
+
+#project-options[open] summary {
+  margin-bottom: 1px;
+}
+
+.project-option-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.project-option-group + .project-option-group {
+  border-top: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border));
+  padding-top: 12px;
+}
+
+.project-model-detail {
+  margin-top: 1px;
+  overflow-wrap: anywhere;
 }
 
 #plan-preview {
@@ -848,6 +868,17 @@ button:disabled {
 .msg-body pre code {
   background: transparent;
   padding: 0;
+}
+
+.msg-body .katex {
+  font-size: 1.04em;
+}
+
+.msg-body .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin: 8px 0;
+  padding: 2px 0;
 }
 
 .msg-body blockquote {

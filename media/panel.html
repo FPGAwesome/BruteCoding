@@ -4,8 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'none'; style-src {{CSP_SOURCE}} 'unsafe-inline'; script-src {{CSP_SOURCE}};" />
+    content="default-src 'none'; style-src {{CSP_SOURCE}} 'unsafe-inline'; font-src {{CSP_SOURCE}}; script-src {{CSP_SOURCE}};" />
   <link rel="stylesheet" href="{{CSS_URI}}" />
+  <link rel="stylesheet" href="{{KATEX_CSS_URI}}" />
   <title>BruteCoding</title>
 </head>
 <body>
@@ -151,23 +152,27 @@
         </div>
         <details id="project-options">
           <summary>Project options</summary>
-          <div class="field">
-            <label for="guidance-provider-select">Guidance provider</label>
-            <select id="guidance-provider-select"></select>
+          <div class="project-option-group">
+            <div class="field">
+              <label for="guidance-provider-select">Guidance provider</label>
+              <select id="guidance-provider-select"></select>
+            </div>
+            <div class="field">
+              <label for="guidance-model-select">Guidance model</label>
+              <select id="guidance-model-select"></select>
+              <p id="guidance-model-detail" class="field-note project-model-detail"></p>
+            </div>
           </div>
-          <div class="field">
-            <label for="guidance-model-select">Guidance model</label>
-            <select id="guidance-model-select"></select>
-            <p id="guidance-model-detail" class="field-note"></p>
-          </div>
-          <div class="field">
-            <label for="taskmaster-provider-select">Taskmaster provider</label>
-            <select id="taskmaster-provider-select"></select>
-          </div>
-          <div class="field">
-            <label for="taskmaster-model-select">Taskmaster model</label>
-            <select id="taskmaster-model-select"></select>
-            <p id="taskmaster-model-detail" class="field-note"></p>
+          <div class="project-option-group">
+            <div class="field">
+              <label for="taskmaster-provider-select">Taskmaster provider</label>
+              <select id="taskmaster-provider-select"></select>
+            </div>
+            <div class="field">
+              <label for="taskmaster-model-select">Taskmaster model</label>
+              <select id="taskmaster-model-select"></select>
+              <p id="taskmaster-model-detail" class="field-note project-model-detail"></p>
+            </div>
           </div>
         </details>
         <section id="plan-preview" class="hidden">
@@ -267,6 +272,7 @@
     </div>
 
   </div>
+  <script src="{{KATEX_JS_URI}}"></script>
   <script src="{{JS_URI}}"></script>
 </body>
 </html>

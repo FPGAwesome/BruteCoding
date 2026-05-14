@@ -801,7 +801,7 @@
   // ── Markdown renderer ─────────────────────────────────────────────────────
   function md(text) {
     const lines = text.split('\n');
-    let out = '', inPre = false, preLang = '', preBuf = '', inUl = false, inOl = false;
+    let out = '', inPre = false, preLang = '', preBuf = '', inMath = false, mathBuf = '', inUl = false, inOl = false;
 
     const closeList = () => {
       if (inUl) { out += '</ul>'; inUl = false; }
@@ -812,8 +812,7 @@
       preBuf = ''; preLang = ''; inPre = false;
     };
     const inline = t => {
-      t = esc(t);
-      t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
+      t = renderInlineMath(t);
       t = t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
       t = t.replace(/\*(.+?)\*/g, '<em>$1</em>');
       return t;
@@ -825,6 +824,29 @@
         continue;
       }
       if (inPre) { preBuf += (preBuf ? '\n' : '') + line; continue; }
+
+      const mathLine = line.trim();
+      if (inMath) {
+        if (mathLine === '$$') {
+          out += renderMath(mathBuf, true);
+          mathBuf = ''; inMath = false;
+        } else {
+          mathBuf += (mathBuf ? '\n' : '') + line;
+        }
+        continue;
+      }
+      if (mathLine === '$$') {
+        closeList();
+        inMath = true;
+        mathBuf = '';
+        continue;
+      }
+      const singleLineMath = mathLine.match(/^\$\$\s*(.+?)\s*\$\$$/);
+      if (singleLineMath) {
+        closeList();
+        out += renderMath(singleLineMath[1], true);
+        continue;
+      }
 
       const h = line.match(/^(#{1,3}) (.+)/);
       if (h) { closeList(); out += `<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`; continue; }
@@ -847,8 +869,80 @@
       out += line.trim() === '' ? '<p></p>' : `<p>${inline(line)}</p>`;
     }
     if (inPre) closePre();
+    if (inMath) out += renderMath(mathBuf, true);
     closeList();
     return out.replace(/(<p><\/p>){2,}/g, '<p></p>');
+  }
+
+  function renderInlineMath(text) {
+    return text.split(/(`[^`]+`)/g).map(part => {
+      if (/^`[^`]+`$/.test(part)) {
+        return `<code>${esc(part.slice(1, -1))}</code>`;
+      }
+      return renderInlineMathSegment(part);
+    }).join('');
+  }
+
+  function renderInlineMathSegment(text) {
+    let out = '';
+    let index = 0;
+    while (index < text.length) {
+      const start = findMathStart(text, index);
+      if (start === -1) {
+        out += esc(text.slice(index));
+        break;
+      }
+
+      const end = findMathEnd(text, start + 1);
+      if (end === -1) {
+        out += esc(text.slice(index));
+        break;
+      }
+
+      out += esc(text.slice(index, start));
+      out += renderMath(text.slice(start + 1, end), false);
+      index = end + 1;
+    }
+    return out;
+  }
+
+  function findMathStart(text, from) {
+    for (let index = from; index < text.length - 1; index += 1) {
+      if (text[index] !== '$' || text[index + 1] === '$' || text[index - 1] === '\\') continue;
+      const next = text[index + 1];
+      const prev = text[index - 1] || ' ';
+      if (/\s|\d/.test(next) || /[\w)]/.test(prev)) continue;
+      return index;
+    }
+    return -1;
+  }
+
+  function findMathEnd(text, from) {
+    for (let index = from; index < text.length; index += 1) {
+      if (text[index] !== '$' || text[index - 1] === '\\') continue;
+      const prev = text[index - 1] || '';
+      const next = text[index + 1] || ' ';
+      if (/\s/.test(prev) || /[\w\d]/.test(next)) continue;
+      return index;
+    }
+    return -1;
+  }
+
+  function renderMath(source, displayMode) {
+    const katexApi = window.katex;
+    if (!katexApi || !source.trim()) {
+      return esc(displayMode ? `$$${source}$$` : `$${source}$`);
+    }
+
+    try {
+      return katexApi.renderToString(source.trim(), {
+        displayMode,
+        throwOnError: false,
+        strict: 'ignore',
+      });
+    } catch {
+      return esc(displayMode ? `$$${source}$$` : `$${source}$`);
+    }
   }
 
   vscode.postMessage({ type: 'ready' });
